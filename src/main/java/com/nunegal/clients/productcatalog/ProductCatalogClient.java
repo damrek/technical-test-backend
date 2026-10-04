@@ -9,8 +9,8 @@ import com.nunegal.exception.ProductNotFoundException;
  * Read access to the two product APIs declared in {@code existingApis.yaml}.
  *
  * <p>
- * The interface exists so the transport stays behind a seam: the circuit breaker and concurrency
- * bound can wrap it without the aggregation service knowing how the calls are made.
+ * The interface exists so the transport stays behind a seam: the cache and the concurrency bound
+ * can wrap it without the aggregation service knowing how the calls are made.
  *
  * <p>
  * Neither method retries. Those failures are permanent (a 404 that never becomes a 200, a

@@ -9,8 +9,8 @@ spring:
     virtual:
       enabled: true
 
-  # Outbound call guards. These bound every request to the product API regardless of what the
-  # resilience layer does, so a hung socket can never pin a request thread indefinitely.
+  # Outbound call guards. Every call to the product API is bounded by these, so a hung socket can
+  # never pin a request thread indefinitely.
   #
   # The factory is pinned to "simple" rather than auto-detected. Detection resolves to the JDK
   # HttpClient, whose failures surface as an opaque
@@ -25,14 +25,6 @@ spring:
       redirects: dont-follow
       imperative:
         factory: simple
-
-  # Product data from the API is effectively static, so it is cached in-process.
-  cache:
-    cache-names:
-      - productDetail
-      - similarIds
-    caffeine:
-      spec: "maximumSize=500,expireAfterWrite=5m"
 
 # Product APIs this service consumes (existingApis.yaml). The base URL moves with the deployment,
 # so it is configuration rather than a literal.
@@ -54,13 +46,8 @@ api:
 server:
   port: 5000
 
-# Use virtual threads for Resilience4j's internal schedulers too.
-resilience4j:
-  thread:
-    type: virtual
-
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,circuitbreakers
+        include: health,info,metrics
