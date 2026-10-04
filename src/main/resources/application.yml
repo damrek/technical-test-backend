@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: similar-products
+
+  # The workload is blocking I/O with pathological downstream latency (a 50s call in the
+  # mock), so virtual threads remove all thread-pool sizing concerns. Spring Boot 4 requires
+  # Java 17+; virtual threads require 21+.
+  threads:
+    virtual:
+      enabled: true
+
+  # Outbound call guards. These bound every downstream request regardless of what the
+  # resilience layer does, so a hung socket can never pin a request thread indefinitely.
+  http:
+    client:
+      connect-timeout: 1s
+      read-timeout: 2s
+      redirects: dont-follow
+
+  # Downstream product data is effectively static, so it is cached in-process.
+  cache:
+    cache-names:
+      - productDetail
+      - similarIds
+    caffeine:
+      spec: "maximumSize=500,expireAfterWrite=5m"
+
+server:
+  port: 5000
+
+# Use virtual threads for Resilience4j's internal schedulers too.
+resilience4j:
+  thread:
+    type: virtual
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,circuitbreakers
