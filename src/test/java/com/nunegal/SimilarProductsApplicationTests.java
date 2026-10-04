@@ -1,4 +1,4 @@
-package com.example.similarproducts;
+package com.nunegal;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
