@@ -2,28 +2,54 @@ spring:
   application:
     name: similar-products
 
-  # The workload is blocking I/O with pathological downstream latency (a 50s call in the
+  # The workload is blocking I/O with pathological product API latency (a 50s call in the
   # mock), so virtual threads remove all thread-pool sizing concerns. Spring Boot 4 requires
   # Java 17+; virtual threads require 21+.
   threads:
     virtual:
       enabled: true
 
-  # Outbound call guards. These bound every downstream request regardless of what the
+  # Outbound call guards. These bound every request to the product API regardless of what the
   # resilience layer does, so a hung socket can never pin a request thread indefinitely.
+  #
+  # The factory is pinned to "simple" rather than auto-detected. Detection resolves to the JDK
+  # HttpClient, whose failures surface as an opaque
+  # "RestClientException: Error while extracting response for type [String]", while the simple
+  # factory raises "ResourceAccessException: I/O error on GET request: Read timed out". Both were
+  # measured to honour the read timeout against a server that answers headers and then stalls the
+  # body, which is the shape of the 50s product API call, so the taxonomy is the deciding factor.
   http:
-    client:
+    clients:
       connect-timeout: 1s
       read-timeout: 2s
       redirects: dont-follow
+      imperative:
+        factory: simple
 
-  # Downstream product data is effectively static, so it is cached in-process.
+  # Product data from the API is effectively static, so it is cached in-process.
   cache:
     cache-names:
       - productDetail
       - similarIds
     caffeine:
       spec: "maximumSize=500,expireAfterWrite=5m"
+
+# Product APIs this service consumes (existingApis.yaml). The base URL moves with the deployment,
+# so it is configuration rather than a literal.
+api:
+  products:
+    base-url: http://localhost:3001
+
+  # Ceiling on product-detail calls this instance has in flight at once, across all of its
+  # requests. This is the fan-out thread pool size, so children beyond it wait their turn instead
+  # of each opening a connection at the same time.
+  similar:
+    # Sized to protect this service's own sockets, not to ration the product API, which has been
+    # measured to absorb far more concurrency than this. With a 2s read timeout and 64 threads,
+    # throughput is roughly 32 calls/s against a demand near 100/s, which leaves each request
+    # finishing well inside its budget. A tighter bound would not protect anything the product API
+    # is not already protected against; it would only queue.
+    max-concurrent-product-api-calls: 64
 
 server:
   port: 5000
