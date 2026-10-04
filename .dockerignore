@@ -1,0 +1,13 @@
+# The image compiles from source, so shipping host build output would be both large and misleading:
+# the artifact inside the image must be the one this Dockerfile just built, not a stale local build.
+.git
+.gradle
+build
+.idea
+out
+bin
+odd
+shared
+*.iml
+HELP.md
+README.md

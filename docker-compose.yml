@@ -1,0 +1,73 @@
+# Mock product API (3001), this service (5000), and the test tooling.
+#
+#   docker compose up -d --build
+#   curl localhost:5000/product/1/similar
+#   docker compose run --rm k6 run scripts/test.js
+#   docker compose down
+#
+# shared/ is copied from the technical test's backendDevTest repo; re-copy it if that changes.
+services:
+  influxdb:
+    image: influxdb:1.8.2
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=k6
+
+  grafana:
+    image: grafana/grafana:8.1.2
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_BASIC_ENABLED=false
+    volumes:
+      - ./shared/grafana:/etc/grafana/provisioning/
+
+  simulado:
+    image: ldabiralai/simulado:latest
+    ports:
+      - "3001:80"
+    volumes:
+      - ./shared/simulado:/app
+    command: ./bin/simulado -f /app/mocks.json
+    # The image has no curl or wget, so probe with node. No /health endpoint; / answers 200.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://localhost/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  similar-products:
+    build:
+      context: .
+    image: similar-products:local
+    ports:
+      - "5000:5000"
+    environment:
+      # Not localhost:3001 — inside a container that address is this service itself.
+      API_PRODUCTS_BASE_URL: http://simulado:80
+    depends_on:
+      simulado:
+        condition: service_healthy
+
+  k6:
+    image: loadimpact/k6:0.28.0
+    ports:
+      - "6565:6565"
+    volumes:
+      - ./shared/k6:/scripts
+    environment:
+      - K6_OUT=influxdb=http://influxdb:8086/k6
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # The script targets host.docker.internal:5000, which is why 5000 stays published above.
+    depends_on:
+      similar-products:
+        condition: service_started
